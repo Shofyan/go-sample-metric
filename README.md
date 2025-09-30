@@ -5,11 +5,13 @@ This project demonstrates how to send metrics from a Go application to an OpenTe
 ## Features
 
 - **Complete OpenTelemetry Pipeline**: Go app → OTEL Collector → Prometheus → Grafana
+- **Direct Datadog Integration**: Send metrics directly to Datadog using OTLP exporters
 - **Pre-configured Dashboard**: Ready-to-use Grafana dashboard with key metrics
 - **Automated Provisioning**: Datasources and dashboards are automatically configured
 - **Comprehensive Metrics**: HTTP requests, latency, errors, and runtime metrics
 - **Easy Setup**: One-command deployment with Docker Compose
 - **Load Testing**: Built-in scripts for generating test traffic
+- **Flexible Exporters**: Support for both HTTP and gRPC OTLP exporters
 
 ## Architecture
 
@@ -19,7 +21,26 @@ Go App → OTEL Collector → Prometheus → Grafana
 
 ## Quick Demo
 
-### Full Demo (Recommended)
+### Datadog Direct Export (Recommended for Production)
+```bash
+# 1. Get your Datadog API key from Datadog → Organization Settings → API Keys
+
+# 2. Configure for Datadog
+cp .env.datadog .env
+# Edit .env and set your actual DD_API_KEY
+
+# 3. Run the Go app (no Docker services needed!)
+go run main.go
+
+# 4. Generate traffic
+./test-load.sh
+
+# 5. View metrics in Datadog
+# Go to Datadog → Metrics → Summary
+# Search for your service name metrics
+```
+
+### Full Demo with Local Stack (Development)
 ```bash
 # 1. Start all services
 ./start-demo.sh
@@ -217,6 +238,93 @@ The dashboard automatically includes:
 - Proper Prometheus queries for all metrics
 - Color-coded panels with thresholds
 - Responsive layout optimized for monitoring
+
+## Datadog Integration
+
+This application now supports direct metric export to Datadog using OpenTelemetry OTLP exporters, bypassing the need for a local collector.
+
+### Quick Setup for Datadog
+
+1. **Get your Datadog API Key**: 
+   - Login to Datadog → Organization Settings → API Keys
+   - Create a new API key or copy an existing one
+
+2. **Configure for Datadog**:
+   ```bash
+   # Copy the Datadog configuration template
+   cp .env.datadog .env
+   
+   # Edit .env and replace your_actual_datadog_api_key_here with your real API key
+   vim .env
+   ```
+
+3. **Run the application**:
+   ```bash
+   go run main.go
+   ```
+
+4. **Generate some traffic**:
+   ```bash
+   ./test-load.sh
+   ```
+
+5. **View metrics in Datadog**:
+   - Go to Datadog → Metrics → Summary
+   - Search for metrics starting with your service name (e.g., `sample_metric_service`)
+
+### Datadog Configuration Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DD_ENABLED` | `false` | Set to `true` to enable direct Datadog export |
+| `DD_API_KEY` | - | Your Datadog API key (**required** when `DD_ENABLED=true`) |
+| `DD_SITE` | `datadoghq.com` | Datadog site based on your account region |
+| `EXPORTER_TYPE` | `http` | Use `http` or `grpc` for OTLP export |
+
+### Supported Datadog Sites
+
+Choose the correct `DD_SITE` based on your Datadog account region:
+- `datadoghq.com` - US1 (default)
+- `datadoghq.eu` - EU
+- `us3.datadoghq.com` - US3  
+- `us5.datadoghq.com` - US5
+- `ap1.datadoghq.com` - AP1
+
+### Architecture Comparison
+
+**Local Development (Default)**:
+```
+Go App → OTEL Collector → Prometheus → Grafana
+```
+
+**Datadog Direct Export**:
+```
+Go App → Datadog OTLP Endpoint → Datadog Platform
+```
+
+### Metrics in Datadog
+
+Once configured, your metrics will appear in Datadog with the following naming pattern:
+- `otel.http.server.request.count` - HTTP request count
+- `otel.http.server.request.duration.ms` - Request latency histogram  
+- `otel.http.server.active_requests` - Active requests gauge
+- `otel.process.runtime.goroutines` - Number of goroutines
+- `otel.process.runtime.mem.alloc.bytes` - Memory allocation
+
+All metrics include service tags like `service.name`, `service.version`, `service.env`, etc.
+
+### Troubleshooting Datadog Integration
+
+**Metrics not appearing in Datadog**:
+1. Verify `DD_API_KEY` is correct and has metrics write permissions
+2. Check `DD_SITE` matches your Datadog account region  
+3. Ensure `DD_ENABLED=true` in your `.env` file
+4. Check application logs for authentication errors
+
+**Connection issues**:
+1. Verify network connectivity to Datadog endpoints
+2. Check firewall rules for HTTPS traffic
+3. Try switching between `http` and `grpc` exporter types
 
 ## Available Metrics
 

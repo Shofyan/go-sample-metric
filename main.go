@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
@@ -19,11 +20,13 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	"google.golang.org/grpc/credentials"
 )
 
 // Environment variables
@@ -40,6 +43,12 @@ const (
 	envWorkMaxLatency = "WORK_MAX_LATENCY_MS"    // int ms
 	envErrorRatePct   = "ERROR_RATE_PERCENT"     // int percent 0-100
 	envShutdownTO     = "SHUTDOWN_TIMEOUT"       // duration, e.g. 5s
+
+	// Datadog specific settings
+	envDatadogAPIKey  = "DD_API_KEY"    // Datadog API key
+	envDatadogSite    = "DD_SITE"       // Datadog site (e.g. datadoghq.com, datadoghq.eu)
+	envDatadogEnabled = "DD_ENABLED"    // Enable Datadog direct export (true/false)
+	envExporterType   = "EXPORTER_TYPE" // http, grpc, or datadog
 )
 
 func getEnv(key, def string) string {
@@ -69,6 +78,12 @@ type config struct {
 	WorkMaxLatencyMS int
 	ErrorRatePercent int
 	ShutdownTimeout  time.Duration
+
+	// Datadog specific settings
+	DatadogAPIKey  string
+	DatadogSite    string
+	DatadogEnabled bool
+	ExporterType   string
 }
 
 func loadConfig() config {
@@ -108,6 +123,12 @@ func loadConfig() config {
 		WorkMaxLatencyMS: parseInt(envWorkMaxLatency, 300),
 		ErrorRatePercent: parseInt(envErrorRatePct, 10),
 		ShutdownTimeout:  parseDuration(envShutdownTO, "5s"),
+
+		// Datadog specific settings
+		DatadogAPIKey:  getEnv(envDatadogAPIKey, ""),
+		DatadogSite:    getEnv(envDatadogSite, "datadoghq.com"),
+		DatadogEnabled: strings.ToLower(getEnv(envDatadogEnabled, "false")) == "true",
+		ExporterType:   getEnv(envExporterType, "http"),
 	}
 	// basic validation / normalization
 	if cfg.WorkMaxLatencyMS < cfg.WorkMinLatencyMS {
@@ -119,15 +140,59 @@ func loadConfig() config {
 	if cfg.ErrorRatePercent > 100 {
 		cfg.ErrorRatePercent = 100
 	}
+
+	// Configure Datadog endpoint if enabled
+	if cfg.DatadogEnabled && cfg.DatadogAPIKey != "" {
+		if cfg.ExporterType == "grpc" {
+			cfg.MetricsEndpoint = fmt.Sprintf("https://otlp.%s:443", cfg.DatadogSite)
+		} else {
+			cfg.MetricsEndpoint = fmt.Sprintf("https://otlp-http.%s/v1/metrics", cfg.DatadogSite)
+		}
+	}
+
 	return cfg
 }
 
-// setupMeterProvider configures the global MeterProvider with OTLP/HTTP exporter.
+// setupMeterProvider configures the global MeterProvider with OTLP exporter.
+// Supports both HTTP and gRPC exporters with Datadog authentication.
 func setupMeterProvider(ctx context.Context, cfg config) (*sdkmetric.MeterProvider, error) {
-	exporter, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpointURL(cfg.MetricsEndpoint),
-		otlpmetrichttp.WithCompression(otlpmetrichttp.GzipCompression),
-	)
+	var exporter sdkmetric.Exporter
+	var err error
+
+	if cfg.ExporterType == "grpc" {
+		// gRPC exporter setup
+		opts := []otlpmetricgrpc.Option{
+			otlpmetricgrpc.WithEndpointURL(cfg.MetricsEndpoint),
+		}
+
+		// Add Datadog API key authentication if enabled
+		if cfg.DatadogEnabled && cfg.DatadogAPIKey != "" {
+			opts = append(opts,
+				otlpmetricgrpc.WithHeaders(map[string]string{
+					"dd-api-key": cfg.DatadogAPIKey,
+				}),
+				otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{})),
+			)
+		}
+
+		exporter, err = otlpmetricgrpc.New(ctx, opts...)
+	} else {
+		// HTTP exporter setup (default)
+		opts := []otlpmetrichttp.Option{
+			otlpmetrichttp.WithEndpointURL(cfg.MetricsEndpoint),
+			otlpmetrichttp.WithCompression(otlpmetrichttp.GzipCompression),
+		}
+
+		// Add Datadog API key authentication if enabled
+		if cfg.DatadogEnabled && cfg.DatadogAPIKey != "" {
+			opts = append(opts, otlpmetrichttp.WithHeaders(map[string]string{
+				"dd-api-key": cfg.DatadogAPIKey,
+			}))
+		}
+
+		exporter, err = otlpmetrichttp.New(ctx, opts...)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("create metric exporter: %w", err)
 	}
@@ -216,8 +281,8 @@ func main() {
 	// Load .env file if present (ignore error if absent)
 	_ = godotenv.Load()
 	cfg := loadConfig()
-	log.Printf("starting service name=%s env=%s app=%s ver=%s port=%s metrics_endpoint=%s export_int=%s export_timeout=%s work_latency_ms=[%d,%d] error_rate=%d%%",
-		cfg.ServiceName, cfg.ServiceEnv, cfg.ServiceApp, cfg.ServiceVersion, cfg.Port, cfg.MetricsEndpoint, cfg.ExportInterval, cfg.ExportTimeout, cfg.WorkMinLatencyMS, cfg.WorkMaxLatencyMS, cfg.ErrorRatePercent)
+	log.Printf("starting service name=%s env=%s app=%s ver=%s port=%s exporter=%s metrics_endpoint=%s export_int=%s export_timeout=%s work_latency_ms=[%d,%d] error_rate=%d%% datadog_enabled=%t",
+		cfg.ServiceName, cfg.ServiceEnv, cfg.ServiceApp, cfg.ServiceVersion, cfg.Port, cfg.ExporterType, cfg.MetricsEndpoint, cfg.ExportInterval, cfg.ExportTimeout, cfg.WorkMinLatencyMS, cfg.WorkMaxLatencyMS, cfg.ErrorRatePercent, cfg.DatadogEnabled)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
