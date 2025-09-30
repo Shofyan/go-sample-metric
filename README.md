@@ -1,6 +1,8 @@
-# Go Sample Metric with OpenTelemetry Collector
+# Go Sample Metric with OpenTelemetry and Datadog Integration
 
-This project demonstrates how to send metrics from a Go application to an OpenTelemetry Collector, which then exports them to Prometheus for storage and Grafana for visualization.
+This project demonstrates how to send metrics from a Go application using OpenTelemetry. It supports two deployment modes:
+1. **Direct to Datadog**: Send metrics directly to Datadog using OTLP exporters (recommended for production)
+2. **Local Stack**: Go app → OTEL Collector → Prometheus → Grafana (recommended for development)
 
 ## Features
 
@@ -15,29 +17,82 @@ This project demonstrates how to send metrics from a Go application to an OpenTe
 
 ## Architecture
 
+**Production (Datadog Direct)**:
+```
+Go App → Datadog OTLP Endpoint → Datadog Platform
+```
+
+**Development (Local Stack)**:
 ```
 Go App → OTEL Collector → Prometheus → Grafana
 ```
+
+## Building and Running
+
+### Prerequisites
+- Go 1.21 or later
+- Docker and Docker Compose (only for local development stack)
+
+### Build
+```bash
+# Build the application
+go build -o sample-metric .
+
+# Or run directly without building
+go run main.go
+```
+
+### Testing the Integration
+Before deploying to production, you can validate the Datadog integration:
+
+```bash
+# Quick validation test (recommended)
+./test-datadog-quick.sh
+
+# Comprehensive test suite (thorough validation)
+./test-datadog.sh
+```
+
+The test scripts will:
+- ✅ Validate configuration settings
+- ✅ Test both HTTP and gRPC exporters
+- ✅ Verify endpoint functionality
+- ✅ Check Datadog endpoint configuration
+- ✅ Generate sample traffic
+
+### Configuration
+The application uses environment variables for configuration. You can:
+1. Create a `.env` file (recommended)
+2. Set environment variables directly
+3. Use the provided example configurations
 
 ## Quick Demo
 
 ### Datadog Direct Export (Recommended for Production)
 ```bash
-# 1. Get your Datadog API key from Datadog → Organization Settings → API Keys
+# 1. Get your Datadog API key 
+# Login to Datadog → Organization Settings → API Keys → New API Key
 
 # 2. Configure for Datadog
 cp .env.datadog .env
-# Edit .env and set your actual DD_API_KEY
 
-# 3. Run the Go app (no Docker services needed!)
-go run main.go
+# 3. Edit .env and set your actual Datadog API key
+# DD_API_KEY=your_actual_datadog_api_key_here
+# Optionally adjust DD_SITE based on your Datadog region
 
-# 4. Generate traffic
+# 4. Build and run the application (no Docker services needed!)
+go build -o sample-metric .
+./sample-metric
+
+# OR run directly:
+# go run main.go
+
+# 5. Generate traffic to create metrics
 ./test-load.sh
 
-# 5. View metrics in Datadog
+# 6. View metrics in Datadog (may take 1-2 minutes to appear)
 # Go to Datadog → Metrics → Summary
-# Search for your service name metrics
+# Search for metrics starting with "otel." or your service name
 ```
 
 ### Full Demo with Local Stack (Development)
@@ -202,13 +257,46 @@ The application can be configured via `.env` file or environment variables:
 | `SERVICE_ENV` | `development` | Environment name (dev, staging, prod) |
 | `SERVICE_APP` | `demo` | Application name |
 | `SERVICE_VERSION` | `0.1.0` | Service version |
-| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | `http://localhost:4318/v1/metrics` | OTEL Collector HTTP endpoint |
 | `PORT` | `8090` | HTTP server port |
-| `METRIC_EXPORT_INTERVAL` | `5s` | How often to export metrics to collector |
+| `METRIC_EXPORT_INTERVAL` | `5s` | How often to export metrics |
 | `METRIC_EXPORT_TIMEOUT` | `10s` | Timeout for metric export |
 | `WORK_MIN_LATENCY_MS` | `50` | Minimum simulated work latency |
 | `WORK_MAX_LATENCY_MS` | `300` | Maximum simulated work latency |
 | `ERROR_RATE_PERCENT` | `10` | Percentage of `/work` requests that return 500 errors |
+| `SHUTDOWN_TIMEOUT` | `5s` | Graceful shutdown timeout |
+| **Datadog Configuration** | | |
+| `DD_ENABLED` | `false` | Set to `true` to enable direct Datadog export |
+| `DD_API_KEY` | - | Your Datadog API key (**required** when `DD_ENABLED=true`) |
+| `DD_SITE` | `datadoghq.com` | Datadog site based on your account region |
+| `EXPORTER_TYPE` | `http` | Use `http` or `grpc` for OTLP export |
+| **Custom OTLP Endpoint** | | |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | `http://localhost:9529/v1/metrics` | Custom OTLP endpoint (when `DD_ENABLED=false`) |
+
+### Configuration Files
+
+The project includes several configuration examples and test scripts:
+
+| File | Purpose | Usage |
+|------|---------|-------|
+| `.env.example` | General configuration template | Copy to `.env` for local development with OTEL Collector |
+| `.env.datadog` | Datadog-specific configuration | Copy to `.env` for direct Datadog integration |
+| `test-datadog.sh` | Comprehensive integration test | Validates all Datadog configurations and modes |
+| `test-datadog-quick.sh` | Quick validation test | Fast check of basic Datadog functionality |
+| `test-load.sh` | Traffic generation script | Creates test requests for metrics validation |
+
+**For local development**:
+```bash
+cp .env.example .env
+# Edit .env as needed
+go run main.go
+```
+
+**For Datadog integration**:
+```bash
+cp .env.datadog .env
+# Edit .env and set your DD_API_KEY
+go run main.go
+```
 
 ### Modifying Configuration
 
@@ -468,6 +556,33 @@ docker-compose logs -f otel-collector | grep -E "(http\.server\.request|process\
 - Check if port 8090 is available: `netstat -tlnp | grep 8090`
 - Verify `.env` file configuration
 
+#### Datadog Integration Issues
+
+**Metrics not appearing in Datadog**:
+```bash
+# Check if DD_ENABLED is set to true
+echo $DD_ENABLED
+
+# Verify API key is set (should not be empty)
+echo $DD_API_KEY | head -c 10
+
+# Check application logs for authentication errors
+grep -i "datadog\|error\|failed" application.log
+```
+
+**Connection issues**:
+```bash
+# Test connectivity to Datadog OTLP endpoint
+curl -v https://otlp-http.datadoghq.com/v1/metrics
+
+# Check DNS resolution
+nslookup otlp-http.datadoghq.com
+```
+
+**Wrong Datadog site**:
+- Verify `DD_SITE` matches your Datadog account region
+- US1: `datadoghq.com`, EU: `datadoghq.eu`, US3: `us3.datadoghq.com`
+
 ## Stopping the Services
 
 ```bash
@@ -482,12 +597,14 @@ pkill -f "go run main.go"
 
 ## Service URLs
 
-- **Go Application**: http://localhost:8091 (note: port from .env file)
-  - Health: http://localhost:8091/healthz
-  - Work simulation: http://localhost:8091/work
-- **Grafana Dashboard**: http://localhost:3000 (admin/admin)
+- **Go Application**: http://localhost:8090 (default port, configurable via `PORT` env var)
+  - Health: http://localhost:8090/healthz
+  - Work simulation: http://localhost:8090/work
+- **Grafana Dashboard**: http://localhost:3000 (admin/admin) - Local development only
   - Pre-configured dashboard: **"Go Sample Metrics - OpenTelemetry Dashboard"**
-- **Prometheus**: http://localhost:9090
+- **Prometheus**: http://localhost:9090 - Local development only
   - Query interface for raw metrics
-- **OTEL Collector**: http://localhost:4318 (HTTP), localhost:4317 (gRPC)
+- **OTEL Collector**: http://localhost:4318 (HTTP), localhost:4317 (gRPC) - Local development only
   - Receiving metrics from Go application
+- **Datadog**: https://app.datadoghq.com - When using direct Datadog export
+  - Metrics → Summary to view exported metrics
