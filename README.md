@@ -1,21 +1,29 @@
 # Go Sample Metric with OpenTelemetry and Datadog Integration
 
-This project demonstrates how to send metrics from a Go application using OpenTelemetry. It supports two deployment modes:
-1. **Direct to Datadog**: Send metrics directly to Datadog using OTLP exporters (recommended for production)
-2. **Local Stack**: Go app → OTEL Collector → Prometheus → Grafana (recommended for development)
+This project demonstrates how to send metrics from a Go application using OpenTelemetry. It supports three deployment modes:
+1. **Docker Compose (Recommended)**: Complete containerized setup with one command
+2. **Direct to Datadog**: Send metrics directly to Datadog using OTLP exporters (production)
+3. **Local Stack**: Go app → OTEL Collector → Prometheus → Grafana (development)
 
 ## Features
 
-- **Complete OpenTelemetry Pipeline**: Go app → OTEL Collector → Prometheus → Grafana
-- **Direct Datadog Integration**: Send metrics directly to Datadog using OTLP exporters
-- **Pre-configured Dashboard**: Ready-to-use Grafana dashboard with key metrics
-- **Automated Provisioning**: Datasources and dashboards are automatically configured
-- **Comprehensive Metrics**: HTTP requests, latency, errors, and runtime metrics
-- **Easy Setup**: One-command deployment with Docker Compose
-- **Load Testing**: Built-in scripts for generating test traffic
-- **Flexible Exporters**: Support for both HTTP and gRPC OTLP exporters
+- **🐳 Complete Docker Setup**: One-command deployment with `docker compose up`
+- **📊 Full Observability Stack**: Go app → OTEL Collector → Prometheus → Grafana
+- **🚀 Direct Datadog Integration**: Send metrics directly to Datadog using OTLP exporters
+- **📈 Pre-configured Dashboard**: Ready-to-use Grafana dashboard with key metrics
+- **⚙️ Automated Provisioning**: Datasources and dashboards are automatically configured
+- **📉 Comprehensive Metrics**: HTTP requests, latency, errors, and runtime metrics
+- **🔧 Easy Setup**: Multiple deployment options for different environments
+- **🧪 Load Testing**: Built-in scripts for generating test traffic
+- **🔄 Flexible Exporters**: Support for both HTTP and gRPC OTLP exporters
+- **🏥 Health Checks**: Built-in health monitoring for all services
 
 ## Architecture
+
+**Docker Compose (Recommended)**:
+```
+Go App (Docker) → OTEL Collector (Docker) → Prometheus (Docker) → Grafana (Docker)
+```
 
 **Production (Datadog Direct)**:
 ```
@@ -27,13 +35,134 @@ Go App → Datadog OTLP Endpoint → Datadog Platform
 Go App → OTEL Collector → Prometheus → Grafana
 ```
 
-## Building and Running
+## Quick Start
 
-### Prerequisites
-- Go 1.21 or later
-- Docker and Docker Compose (only for local development stack)
+### 🚀 Option 1: Docker Compose (Recommended)
 
-### Build
+The fastest way to get everything running:
+
+```bash
+# Clone and navigate to the project
+git clone <repository-url>
+cd go-sample-metric
+
+# Start all services (Go app + monitoring stack)
+docker compose up --build
+
+# Or use the convenient startup script
+./start-docker.sh
+```
+
+**That's it!** All services will be running with:
+- **Go Application**: http://localhost:8080
+  - Health: http://localhost:8080/healthz
+  - Work endpoint: http://localhost:8080/work
+- **Grafana Dashboard**: http://localhost:3000 (admin/admin)
+- **Prometheus**: http://localhost:9090
+
+Generate some traffic:
+```bash
+# In another terminal
+./test-load.sh
+```
+
+### 🔧 Option 2: Local Development
+
+For development with hot-reload:
+
+```bash
+# Start monitoring services only
+docker compose up prometheus otel-collector grafana -d
+
+# Run Go app locally
+go run main.go
+
+# Generate traffic
+./test-load.sh
+```
+
+### ☁️ Option 3: Datadog Direct (Production)
+
+### ☁️ Option 3: Datadog Direct (Production)
+
+Skip the local stack and send directly to Datadog:
+
+```bash
+# 1. Get your Datadog API key from Datadog → Organization Settings → API Keys
+
+# 2. Configure for Datadog
+cp .env.datadog .env
+# Edit .env and set: DD_API_KEY=your_actual_datadog_api_key_here
+
+# 3. Run the application (no Docker services needed!)
+go run main.go
+
+# 4. Generate traffic
+./test-load.sh
+
+# 5. View metrics in Datadog → Metrics → Summary
+```
+
+## 📋 Prerequisites
+
+- **Go 1.23 or later** (for local development)
+- **Docker and Docker Compose** (for containerized setup)
+- **Git** (for cloning the repository)
+
+## 🛠️ Building and Running
+
+### Docker Setup (Recommended)
+
+The project includes complete Docker support with:
+- Multi-stage Docker build for optimized images
+- Health checks for all services
+- Environment-based configuration
+- Automated service dependencies
+
+**Build only the Go application:**
+```bash
+docker compose build go-sample-metric
+```
+
+**Start specific services:**
+```bash
+# Start monitoring stack only
+docker compose up prometheus otel-collector grafana -d
+
+# Start everything
+docker compose up --build
+
+# Run in background
+docker compose up --build -d
+```
+
+**View service status:**
+```bash
+docker compose ps
+```
+
+**View logs:**
+```bash
+# All services
+docker compose logs
+
+# Specific service
+docker compose logs go-sample-metric
+
+# Follow logs
+docker compose logs -f go-sample-metric
+```
+
+**Stop services:**
+```bash
+docker compose down
+
+# Stop and remove volumes
+docker compose down -v
+```
+
+### Local Development Build
+
 ```bash
 # Build the application
 go build -o sample-metric .
@@ -42,76 +171,78 @@ go build -o sample-metric .
 go run main.go
 ```
 
-### Testing the Integration
-Before deploying to production, you can validate the Datadog integration:
+## 🧪 Testing the Integration
+
+Before deploying to production, validate your setup:
 
 ```bash
 # Quick validation test (recommended)
 ./test-datadog-quick.sh
 
-# Comprehensive test suite (thorough validation)
-./test-datadog.sh
+## 🐳 Docker Guide
+
+For detailed Docker setup, configuration, and troubleshooting, see the **[DOCKER_GUIDE.md](DOCKER_GUIDE.md)**.
+
+### Quick Docker Commands
+
+```bash
+# Start everything
+docker compose up --build
+
+# Start in background
+docker compose up --build -d
+
+# View status and health
+docker compose ps
+
+# View logs
+docker compose logs go-sample-metric
+
+# Stop everything
+docker compose down
+
+# Complete cleanup
+docker compose down -v --rmi all
 ```
 
-The test scripts will:
-- ✅ Validate configuration settings
-- ✅ Test both HTTP and gRPC exporters
-- ✅ Verify endpoint functionality
-- ✅ Check Datadog endpoint configuration
-- ✅ Generate sample traffic
+### Docker Configuration
 
-### Configuration
-The application uses environment variables for configuration. You can:
-1. Create a `.env` file (recommended)
-2. Set environment variables directly
-3. Use the provided example configurations
+The Docker setup uses `.env.docker` for configuration:
 
-## Quick Demo
-
-### Datadog Direct Export (Recommended for Production)
 ```bash
-# 1. Get your Datadog API key 
-# Login to Datadog → Organization Settings → API Keys → New API Key
+# View current Docker configuration
+cat .env.docker
 
-# 2. Configure for Datadog
-cp .env.datadog .env
-
-# 3. Edit .env and set your actual Datadog API key
-# DD_API_KEY=your_actual_datadog_api_key_here
-# Optionally adjust DD_SITE based on your Datadog region
-
-# 4. Build and run the application (no Docker services needed!)
-go build -o sample-metric .
-./sample-metric
-
-# OR run directly:
-# go run main.go
-
-# 5. Generate traffic to create metrics
-./test-load.sh
-
-# 6. View metrics in Datadog (may take 1-2 minutes to appear)
-# Go to Datadog → Metrics → Summary
-# Search for metrics starting with "otel." or your service name
+# Customize Docker settings
+cp .env.docker .env.docker.local
+# Edit .env.docker.local with your settings
 ```
 
-### Full Demo with Local Stack (Development)
+### Docker Startup Scripts
+
+The project includes convenient startup scripts:
+
 ```bash
-# 1. Start all services
+# Complete Docker setup with cleanup handling
+./start-docker.sh
+
+# Traditional monitoring stack only
 ./start-demo.sh
-
-# 2. In another terminal, start the Go app
-go run main.go
-
-# 3. Generate traffic
-./test-load.sh
-
-# 4. View the dashboard
-# Open http://localhost:3000 (admin/admin)
-# Navigate to "Go Sample Metrics - OpenTelemetry Dashboard"
 ```
 
-### Manual Step-by-Step
+**`start-docker.sh` features:**
+- ✅ Builds and starts all services including Go app
+- ✅ Handles cleanup on exit (Ctrl+C)
+- ✅ Shows clear status messages
+- ✅ Works with both `docker compose` and `docker-compose`
+
+### Service URLs (Docker)
+
+When running with Docker Compose:
+- **Go Application**: http://localhost:8080
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Prometheus**: http://localhost:9090
+- **OTEL Collector**: http://localhost:4318 (HTTP), localhost:4317 (gRPC)
 
 ### 1. Start the monitoring stack
 
@@ -274,15 +405,37 @@ The application can be configured via `.env` file or environment variables:
 
 ### Configuration Files
 
-The project includes several configuration examples and test scripts:
+The project includes several configuration examples and setup files:
 
 | File | Purpose | Usage |
 |------|---------|-------|
-| `.env.example` | General configuration template | Copy to `.env` for local development with OTEL Collector |
-| `.env.datadog` | Datadog-specific configuration | Copy to `.env` for direct Datadog integration |
-| `test-datadog.sh` | Comprehensive integration test | Validates all Datadog configurations and modes |
-| `test-datadog-quick.sh` | Quick validation test | Fast check of basic Datadog functionality |
-| `test-load.sh` | Traffic generation script | Creates test requests for metrics validation |
+| **Environment Configuration** | | |
+| `.env` | Local development config | `cp .env.example .env` |
+| `.env.docker` | Docker Compose config | Used automatically in Docker |
+| `.env.datadog` | Datadog integration config | `cp .env.datadog .env` |
+| **Docker Configuration** | | |
+| `Dockerfile` | Multi-stage Go app build | Used by `docker compose build` |
+| `docker-compose.yml` | Service orchestration | Defines all services and networking |
+| `.dockerignore` | Docker build optimization | Excludes unnecessary files from build |
+| **Scripts** | | |
+| `start-docker.sh` | Complete Docker startup | `./start-docker.sh` |
+| `start-demo.sh` | Traditional monitoring stack | `./start-demo.sh` |
+| **Testing** | | |
+| `test-datadog.sh` | Comprehensive integration test | Validates all Datadog configurations |
+| `test-datadog-quick.sh` | Quick validation test | Fast check of basic functionality |
+| `test-load.sh` | Traffic generation script | Creates test requests for metrics |
+| **Monitoring Configuration** | | |
+| `otel-collector.yaml` | OTEL Collector configuration | Defines metric pipelines |
+| `prometheus.yml` | Prometheus scrape configuration | Defines metric collection |
+| `grafana/provisioning/` | Grafana auto-configuration | Dashboards and datasources |
+
+### Environment Configuration Examples
+
+**For Docker development**:
+```bash
+# Uses .env.docker automatically
+docker compose up --build
+```
 
 **For local development**:
 ```bash
@@ -296,6 +449,13 @@ go run main.go
 cp .env.datadog .env
 # Edit .env and set your DD_API_KEY
 go run main.go
+```
+
+**For custom Docker config**:
+```bash
+cp .env.docker .env.docker.local
+# Edit .env.docker.local with your settings
+# Modify docker-compose.yml to use .env.docker.local
 ```
 
 ### Modifying Configuration
@@ -583,17 +743,148 @@ nslookup otlp-http.datadoghq.com
 - Verify `DD_SITE` matches your Datadog account region
 - US1: `datadoghq.com`, EU: `datadoghq.eu`, US3: `us3.datadoghq.com`
 
-## Stopping the Services
+## 📁 Project Structure
+
+```
+go-sample-metric/
+├── 🐳 Docker Configuration
+│   ├── Dockerfile                 # Multi-stage Go app build
+│   ├── docker-compose.yml         # Complete service orchestration
+│   ├── .dockerignore              # Build optimization
+│   └── .env.docker                # Docker environment config
+├── 🚀 Application
+│   ├── main.go                    # Go application with OTEL metrics
+│   ├── go.mod                     # Go dependencies
+│   └── go.sum                     # Dependency checksums
+├── ⚙️ Configuration
+│   ├── .env.example               # Local development template
+│   ├── .env.datadog               # Datadog integration template
+│   ├── otel-collector.yaml        # OTEL Collector configuration
+│   └── prometheus.yml             # Prometheus scrape config
+├── 📊 Monitoring
+│   └── grafana/provisioning/
+│       ├── dashboards/
+│       │   ├── dashboard.yml      # Dashboard auto-loading config
+│       │   └── go-sample-metrics.json  # Pre-built dashboard
+│       └── datasources/
+│           └── prometheus.yml     # Prometheus datasource config
+├── 🧪 Testing & Scripts
+│   ├── start-docker.sh           # Complete Docker startup script
+│   ├── start-demo.sh             # Traditional monitoring stack
+│   ├── test-datadog.sh           # Comprehensive Datadog test
+│   ├── test-datadog-quick.sh     # Quick Datadog validation
+│   └── test-load.sh              # Load testing script
+└── 📚 Documentation
+    ├── README.md                  # This file - complete guide
+    ├── DOCKER_GUIDE.md            # Detailed Docker documentation
+    ├── DATADOG_INTEGRATION.md     # Datadog setup guide
+    └── TEST_SCRIPTS.md            # Testing documentation
+```
+
+## 🆕 What's New - Docker Integration
+
+This project now includes complete Docker support with the following improvements:
+
+### ✨ **New Features Added**
+- 🐳 **Complete Docker Compose setup** - Start everything with one command
+- 🏥 **Health checks** for all services with proper dependency management
+- 🔧 **Multi-stage Docker build** for optimized Go application images
+- 📝 **Environment-based configuration** with Docker-specific settings
+- 🚀 **Startup scripts** with cleanup handling and error management
+- 📖 **Comprehensive documentation** including Docker guide and troubleshooting
+- 🔒 **Security improvements** with non-root user in containers
+- 🌐 **Proper networking** between all services
+
+### 🎯 **Key Benefits**
+- **Zero-configuration startup** - Just run `docker compose up --build`
+- **Consistent environments** - Same setup across development, testing, and production
+- **Easy debugging** - All logs accessible via `docker compose logs`
+- **Resource management** - Controlled resource usage with limits and health checks
+- **Development friendly** - Hot-reload support with local development mode
+
+### 🔄 **Migration from Previous Setup**
+If you were using the previous manual setup:
 
 ```bash
-# Stop the monitoring stack
-docker-compose down
+# Old way
+./start-demo.sh
+go run main.go
 
-# Stop the Go application
+# New way - everything in Docker
+docker compose up --build
+
+# Or hybrid - monitoring in Docker, app local for development
+docker compose up prometheus otel-collector grafana -d
+go run main.go
+```
+
+## 🛑 Stopping the Services
+
+### Docker Compose
+```bash
+# Stop all services (graceful)
+docker compose down
+
+# Stop and remove volumes (clean slate)
+docker compose down -v
+
+# Stop and remove everything including images
+docker compose down --rmi all -v
+
+# Force stop if services are unresponsive
+docker compose kill && docker compose down
+```
+
+### Local Development
+```bash
+# Stop monitoring stack (if running via Docker)
+docker compose down
+
+# Stop Go application
 Ctrl+C (if running in foreground)
 # or
 pkill -f "go run main.go"
+# or  
+pkill -f "./sample-metric"
 ```
+
+### Quick Commands
+```bash
+# View what's running
+docker compose ps
+
+# Stop specific service
+docker compose stop go-sample-metric
+
+# Restart specific service
+docker compose restart go-sample-metric
+
+# View resource usage
+docker compose top
+```
+
+## 🌐 Service URLs
+
+### Docker Compose Mode
+- **Go Application**: http://localhost:8080
+  - Health: http://localhost:8080/healthz
+  - Work endpoint: http://localhost:8080/work
+- **Grafana Dashboard**: http://localhost:3000 (admin/admin)
+- **Prometheus**: http://localhost:9090
+- **OTEL Collector**: http://localhost:4318 (HTTP), localhost:4317 (gRPC)
+
+### Local Development Mode  
+- **Go Application**: http://localhost:8091 (default from .env)
+  - Health: http://localhost:8091/healthz
+  - Work endpoint: http://localhost:8091/work
+- **Grafana Dashboard**: http://localhost:3000 (admin/admin) - from Docker
+- **Prometheus**: http://localhost:9090 - from Docker
+- **OTEL Collector**: http://localhost:4318 (HTTP), localhost:4317 (gRPC) - from Docker
+
+### Datadog Mode
+- **Go Application**: http://localhost:8091 (local) or http://localhost:8080 (Docker)
+- **Datadog Dashboard**: https://app.datadoghq.com
+  - Navigate to Metrics → Summary to view exported metrics
 
 ## Service URLs
 
